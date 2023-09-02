@@ -2,7 +2,7 @@
 
 The Committee Simulator is a simple app designed to simulate the committee of the [Pactus](https://pactus.org/) blockchain.
 
-![committee simulator](example/20230707_214956.png)
+![committee simulator](example/20230903_000709.png)
 
 ## How to run
 

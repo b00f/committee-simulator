@@ -7,12 +7,10 @@ import (
 	"os"
 	"os/exec"
 	"strconv"
-	"strings"
 	"time"
 
 	"github.com/pactus-project/pactus/committee"
 	"github.com/pactus-project/pactus/crypto"
-	"github.com/pactus-project/pactus/crypto/bls"
 	"github.com/pactus-project/pactus/crypto/hash"
 	"github.com/pactus-project/pactus/execution"
 	"github.com/pactus-project/pactus/sortition"
@@ -20,6 +18,7 @@ import (
 	"github.com/pactus-project/pactus/types/tx"
 	"github.com/pactus-project/pactus/types/validator"
 	"github.com/pactus-project/pactus/util"
+	"github.com/pactus-project/pactus/util/testsuite"
 	"github.com/pelletier/go-toml"
 )
 
@@ -37,22 +36,8 @@ type ValKey struct {
 	reward    int
 }
 
-type JoinedValKey struct {
-	ValKey    *ValKey
-	BlockHash hash.Hash
-}
-
-func hasDuplicates(vector []*validator.Validator) bool {
-	countMap := make(map[int32]int)
-
-	for _, val := range vector {
-		countMap[val.Number()]++
-		if countMap[val.Number()] > 1 {
-			return true
-		}
-	}
-
-	return false
+type JoinedSortitions struct {
+	Trx *tx.Tx
 }
 
 func main() {
@@ -94,9 +79,10 @@ func main() {
 	valKeys := []ValKey{}
 	totalStake := int64(0)
 	num := int32(0)
+	ts := testsuite.NewTestSuiteForSeed(time.Now().Unix())
 	for _, stake := range config.Stakes {
 		for i := 0; i < stake[1]; i++ {
-			pub, prv := bls.GenerateTestKeyPair()
+			pub, prv := ts.RandBLSKeyPair()
 			val := validator.NewValidator(pub, num)
 			val.AddToStake(int64(stake[0]) * 10e9)
 			val.UpdateLastBondingHeight(uint32(i))
@@ -127,19 +113,19 @@ func main() {
 		panic(err)
 	}
 
-	evaluateSortition := func(hash hash.Hash, cmt committee.Committee,
-		seed sortition.VerifiableSeed, start, len int) []JoinedValKey {
-		joined := []JoinedValKey{}
+	evaluateSortition := func(stamp hash.Stamp, cmt committee.Committee,
+		seed sortition.VerifiableSeed, start, len int) []*tx.Tx {
+		sortitions := []*tx.Tx{}
 		for i := start; i < start+len; i++ {
 			valKey := valKeys[i]
 
 			rnd := util.RandInt64(totalStake)
 			if rnd < valKey.val.Power() {
 				valKeys[i].sortition++
-				joined = append(joined, JoinedValKey{
-					ValKey:    &valKey,
-					BlockHash: hash,
-				})
+				trx := tx.NewSortitionTx(stamp, valKey.val.Sequence()+1, valKey.val.Address(), ts.RandProof())
+				valKey.signer.SignMsg(trx)
+
+				sortitions = append(sortitions, trx)
 			}
 
 			// Our sortition algorithm is too slow for this simulator.
@@ -149,35 +135,36 @@ func main() {
 			// ok, _ := sortition.EvaluateSortition(seed, valKey.signer, totalStake, valKey.val.Power())
 			// if ok {
 			// 	valKeys[i].sortition++
-			// 	valKeys[i].val.UpdateLastJoinedHeight(height)
-			// 	joined = append(joined, valKey.val)
+			// 	trx := tx.NewSortitionTx(stamp, valKey.val.Sequence()+1, valKey.val.Address(), ts.RandProof())
+			// 	valKey.signer.SignMsg(trx)
+			//
+			// sortitions = append(sortitions, trx)
 			// }
 		}
-		return joined
+		return sortitions
 	}
 
-	seed := sortition.GenerateRandomSeed()
-	joined := []JoinedValKey{}
-	blockHashes := make([]hash.Hash, 0, uint32(config.NumberOfDays*8640)+1)
+	seed := ts.RandSeed()
 	exe := execution.NewExecutor()
 	startHeight := uint32(10000)
 	sb := &sandbox.MockSandbox{
 		MockCommittee:    cmt,
 		MockValidators:   mockValidators,
 		MockParams:       params,
-		BlockHashes:      blockHashes,
-		StartHeight:      startHeight,
-		JoinedValidators: map[crypto.Address]bool{},
+		CurHeight:        startHeight,
+		JoinedValidators: []*validator.Validator{},
 	}
 	for height := startHeight; height < uint32(config.NumberOfDays*8640)+startHeight; height++ {
-		blockHash := hash.GenerateTestHash()
-		sb.BlockHashes = append(sb.BlockHashes, blockHash)
-		if height%100 == 0 {
+		sb.CurHeight = height
+		stamp := hash.Stamp{}
+		copy(stamp[:], util.Uint32ToSlice(height))
+
+		if height%1000 == 0 {
 			fmt.Printf("Height %v\n", height)
 		}
 
 		threads := []*Thread{}
-		threadCount := 4
+		threadCount := 8
 		for i := 0; i < threadCount; i++ {
 			threads = append(threads, NewThread(evaluateSortition))
 		}
@@ -186,38 +173,22 @@ func main() {
 		for i, th := range threads {
 			if i == threadCount-1 {
 				newLen := length + totalValNum%threadCount
-				th.Start(blockHash, cmt, seed, length*i, newLen)
+				th.Start(stamp, cmt, seed, length*i, newLen)
 			} else {
-				th.Start(blockHash, cmt, seed, length*i, length)
+				th.Start(stamp, cmt, seed, length*i, length)
 			}
 		}
+		allSortitions := []*tx.Tx{}
 		for _, th := range threads {
-			joined = append(joined, th.Join()...)
+			allSortitions = append(allSortitions, th.Join()...)
 		}
 
-		canJoin := []*validator.Validator{}
-		removeIndex := []int{}
-		for i, j := range joined {
-			trx := tx.NewSortitionTx(j.BlockHash.Stamp(), j.ValKey.val.Sequence()+1, j.ValKey.val.Address(), sortition.GenerateRandomProof())
-			j.ValKey.signer.SignMsg(trx)
+		for _, trx := range allSortitions {
 			err := exe.Execute(trx, sb)
-			if err == nil {
-				canJoin = append(canJoin, j.ValKey.val)
-				j.ValKey.val.IncSequence()
-
-				removeIndex = append(removeIndex, i)
-			} else {
-				if strings.Contains(err.Error(), "Invalid stamp. The transactions failed in 7 blocks due to a sudden influx of sortition evaluations.") {
-					fmt.Fprintf(logFile, "height: %v, val %v, err: %v\n", height, j.ValKey.val.Number(), err.Error())
-					removeIndex = append(removeIndex, i)
-				} else {
-					break
-				}
+			if err != nil {
+				val := sb.Validator(trx.Payload().Signer())
+				fmt.Fprintf(logFile, "height: %v, val %v, err: %v\n", height, val.Number(), err.Error())
 			}
-		}
-
-		for n := len(removeIndex) - 1; n >= 0; n-- {
-			joined = append(joined[:n], joined[n+1:]...)
 		}
 
 		proposer := cmt.Proposer(0).Number()
@@ -232,14 +203,10 @@ func main() {
 					fmt.Fprintf(logFile, "%v-", val.Number())
 				}
 			}
-			fmt.Fprintf(logFile, "] <- (")
-			for _, j := range canJoin {
-				fmt.Fprintf(logFile, "%v-", j.Number())
-			}
-			fmt.Fprintf(logFile, ")\n")
+			fmt.Fprintf(logFile, "]")
 		}
 
-		cmt.Update(0, canJoin)
+		cmt.Update(0, sb.JoinedValidators)
 		sb.Reset()
 	}
 
@@ -260,8 +227,9 @@ func main() {
 		totalSortitions += valPrv.sortition
 	}
 
-	fmt.Printf("totalRewards: %v\n", totalRewards)
-	fmt.Printf("totalSortitions: %v\n", totalSortitions)
+	fmt.Printf("Total Rewards: %v\n", totalRewards)
+	fmt.Printf("Total Sortitions: %v\n", totalSortitions)
+	fmt.Printf("Expected Sortitions: %v\n", config.NumberOfDays*8640)
 
 	if totalRewards != 8640*config.NumberOfDays {
 		panic("invalid data")

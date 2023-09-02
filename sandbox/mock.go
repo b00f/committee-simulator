@@ -8,9 +8,24 @@ import (
 	"github.com/pactus-project/pactus/sandbox"
 	"github.com/pactus-project/pactus/sortition"
 	"github.com/pactus-project/pactus/types/account"
+	"github.com/pactus-project/pactus/types/block"
 	"github.com/pactus-project/pactus/types/param"
 	"github.com/pactus-project/pactus/types/validator"
+	"github.com/pactus-project/pactus/util"
 )
+
+func hasDuplicates(vector []*validator.Validator) bool {
+	countMap := make(map[int32]int)
+
+	for _, val := range vector {
+		countMap[val.Number()]++
+		if countMap[val.Number()] > 1 {
+			return true
+		}
+	}
+
+	return false
+}
 
 var _ sandbox.Sandbox = &MockSandbox{}
 
@@ -19,64 +34,52 @@ type MockSandbox struct {
 	MockCommittee    committee.Committee
 	MockValidators   map[crypto.Address]*validator.Validator
 	MockParams       param.Params
-	BlockHashes      []hash.Hash
-	StartHeight      uint32
-	JoinedValidators map[crypto.Address]bool
+	CurHeight        uint32
+	JoinedValidators []*validator.Validator
 }
 
 func (m *MockSandbox) Account(addr crypto.Address) *account.Account {
-	return nil
+	panic("unreachable")
 }
 func (m *MockSandbox) MakeNewAccount(_ crypto.Address) *account.Account {
-	return nil
+	panic("unreachable")
 }
 func (m *MockSandbox) UpdateAccount(addr crypto.Address, acc *account.Account) {
-
+	panic("unreachable")
 }
 func (m *MockSandbox) Validator(addr crypto.Address) *validator.Validator {
 	val := m.MockValidators[addr]
 	return val
 }
 func (m *MockSandbox) JoinedToCommittee(addr crypto.Address) {
-	m.JoinedValidators[addr] = true
+	val := m.MockValidators[addr]
+	m.JoinedValidators = append(m.JoinedValidators, val)
+
+	if hasDuplicates(m.JoinedValidators) {
+		panic("has duplicated")
+	}
 }
 func (m *MockSandbox) IsJoinedCommittee(addr crypto.Address) bool {
-	return m.JoinedValidators[addr]
+	panic("unreachable")
 }
 func (m *MockSandbox) MakeNewValidator(pub *bls.PublicKey) *validator.Validator {
-	return nil
+	panic("unreachable")
 }
 func (m *MockSandbox) UpdateValidator(val *validator.Validator) {
 	m.MockValidators[val.Address()] = val
 }
 func (m *MockSandbox) CurrentHeight() uint32 {
-	return uint32(len(m.BlockHashes)) + m.StartHeight
+	return m.CurHeight
 }
 func (m *MockSandbox) Params() param.Params {
 	return m.MockParams
 }
-func (m *MockSandbox) FindBlockHashByStamp(stamp hash.Stamp) (hash.Hash, bool) {
-	for _, h := range m.BlockHashes {
-		if h.Stamp().EqualsTo(stamp) {
-			return h, true
-		}
-	}
-	return hash.Hash{}, false
-}
-func (m *MockSandbox) FindBlockHeightByStamp(stamp hash.Stamp) (uint32, bool) {
-	for i, h := range m.BlockHashes {
-		if h.Stamp().EqualsTo(stamp) {
-			return uint32(i) + m.StartHeight, true
-		}
-	}
-	return 0, false
-}
 func (m *MockSandbox) IterateAccounts(consumer func(crypto.Address, *account.Account, bool)) {
-
+	panic("unreachable")
 }
 func (m *MockSandbox) IterateValidators(consumer func(*validator.Validator, bool, bool)) {
-	for _, val := range m.MockValidators {
-		consumer(val, false, m.JoinedValidators[val.Address()])
+	for _, val := range m.JoinedValidators {
+		consumer(val, false, true)
 	}
 }
 
@@ -89,5 +92,18 @@ func (m *MockSandbox) VerifyProof(hash.Stamp, sortition.Proof, *validator.Valida
 }
 
 func (m *MockSandbox) Reset() {
-	m.JoinedValidators = make(map[crypto.Address]bool)
+	m.JoinedValidators = make([]*validator.Validator, 0, 10)
+}
+
+func (m *MockSandbox) UpdatePowerDelta(delta int64) {
+	panic("unreachable")
+}
+
+func (m *MockSandbox) PowerDelta() int64 {
+	panic("unreachable")
+}
+
+func (m *MockSandbox) RecentBlockByStamp(stamp hash.Stamp) (uint32, *block.Block) {
+	height := util.SliceToUint32(stamp.Bytes())
+	return height, nil
 }

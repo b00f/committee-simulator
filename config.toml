@@ -1,4 +1,4 @@
 committee_size = 51
-number_of_days = 10
+number_of_days = 30
 offline_percentage = 0
 stakes = [[1000, 1000], [500, 1000], [250, 1000], [125, 1000]]
