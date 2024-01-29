@@ -17,5 +17,8 @@ Please note that you need to modify these parameters to suit your simulation nee
 After setting the parameters, you can run the simulator using the following command:
 
 ```
+pip3 install pandas
+pip3 install matplotlib
+
 go run .
 ```

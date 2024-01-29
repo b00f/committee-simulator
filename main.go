@@ -11,7 +11,7 @@ import (
 
 	"github.com/pactus-project/pactus/committee"
 	"github.com/pactus-project/pactus/crypto"
-	"github.com/pactus-project/pactus/crypto/hash"
+	"github.com/pactus-project/pactus/crypto/bls"
 	"github.com/pactus-project/pactus/execution"
 	"github.com/pactus-project/pactus/sortition"
 	"github.com/pactus-project/pactus/types/param"
@@ -30,7 +30,7 @@ type Config struct {
 }
 
 type ValKey struct {
-	signer    crypto.Signer
+	signer    *bls.ValidatorKey
 	val       *validator.Validator
 	sortition int
 	reward    int
@@ -89,7 +89,7 @@ func main() {
 			val.UpdateLastSortitionHeight(uint32(i))
 
 			valKeys = append(valKeys, ValKey{
-				signer:    crypto.NewSigner(prv),
+				signer:    bls.NewValidatorKey(prv),
 				val:       val,
 				sortition: 0,
 			})
@@ -97,7 +97,7 @@ func main() {
 			num++
 			totalStake += val.Stake()
 
-			mockValidators[pub.Address()] = val
+			mockValidators[pub.ValidatorAddress()] = val
 		}
 	}
 
@@ -113,7 +113,7 @@ func main() {
 		panic(err)
 	}
 
-	evaluateSortition := func(stamp hash.Stamp, cmt committee.Committee,
+	evaluateSortition := func(height uint32, cmt committee.Committee,
 		seed sortition.VerifiableSeed, start, len int) []*tx.Tx {
 		sortitions := []*tx.Tx{}
 		for i := start; i < start+len; i++ {
@@ -122,8 +122,10 @@ func main() {
 			rnd := util.RandInt64(totalStake)
 			if rnd < valKey.val.Power() {
 				valKeys[i].sortition++
-				trx := tx.NewSortitionTx(stamp, valKey.val.Sequence()+1, valKey.val.Address(), ts.RandProof())
-				valKey.signer.SignMsg(trx)
+				trx := tx.NewSortitionTx(height, valKey.val.Address(), ts.RandProof())
+				// sb := trx.SignBytes()
+				// sig := valKey.signer.Sign(sb)
+				// trx.SetSignature(sig)
 
 				sortitions = append(sortitions, trx)
 			}
@@ -150,14 +152,12 @@ func main() {
 	sb := &sandbox.MockSandbox{
 		MockCommittee:    cmt,
 		MockValidators:   mockValidators,
-		MockParams:       params,
+		MockParams:       *params,
 		CurHeight:        startHeight,
 		JoinedValidators: []*validator.Validator{},
 	}
 	for height := startHeight; height < uint32(config.NumberOfDays*8640)+startHeight; height++ {
 		sb.CurHeight = height
-		stamp := hash.Stamp{}
-		copy(stamp[:], util.Uint32ToSlice(height))
 
 		if height%1000 == 0 {
 			fmt.Printf("Height %v\n", height)
@@ -173,9 +173,9 @@ func main() {
 		for i, th := range threads {
 			if i == threadCount-1 {
 				newLen := length + totalValNum%threadCount
-				th.Start(stamp, cmt, seed, length*i, newLen)
+				th.Start(height, cmt, seed, length*i, newLen)
 			} else {
-				th.Start(stamp, cmt, seed, length*i, length)
+				th.Start(height, cmt, seed, length*i, length)
 			}
 		}
 		allSortitions := []*tx.Tx{}

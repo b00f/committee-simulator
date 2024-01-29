@@ -4,14 +4,12 @@ import (
 	"github.com/pactus-project/pactus/committee"
 	"github.com/pactus-project/pactus/crypto"
 	"github.com/pactus-project/pactus/crypto/bls"
-	"github.com/pactus-project/pactus/crypto/hash"
 	"github.com/pactus-project/pactus/sandbox"
 	"github.com/pactus-project/pactus/sortition"
 	"github.com/pactus-project/pactus/types/account"
-	"github.com/pactus-project/pactus/types/block"
 	"github.com/pactus-project/pactus/types/param"
+	"github.com/pactus-project/pactus/types/tx"
 	"github.com/pactus-project/pactus/types/validator"
-	"github.com/pactus-project/pactus/util"
 )
 
 func hasDuplicates(vector []*validator.Validator) bool {
@@ -71,8 +69,8 @@ func (m *MockSandbox) UpdateValidator(val *validator.Validator) {
 func (m *MockSandbox) CurrentHeight() uint32 {
 	return m.CurHeight
 }
-func (m *MockSandbox) Params() param.Params {
-	return m.MockParams
+func (m *MockSandbox) Params() *param.Params {
+	return &m.MockParams
 }
 func (m *MockSandbox) IterateAccounts(consumer func(crypto.Address, *account.Account, bool)) {
 	panic("unreachable")
@@ -87,7 +85,7 @@ func (m *MockSandbox) Committee() committee.Reader {
 	return m.MockCommittee
 }
 
-func (m *MockSandbox) VerifyProof(hash.Stamp, sortition.Proof, *validator.Validator) bool {
+func (m *MockSandbox) VerifyProof(uint32, sortition.Proof, *validator.Validator) bool {
 	return true
 }
 
@@ -103,7 +101,14 @@ func (m *MockSandbox) PowerDelta() int64 {
 	panic("unreachable")
 }
 
-func (m *MockSandbox) RecentBlockByStamp(stamp hash.Stamp) (uint32, *block.Block) {
-	height := util.SliceToUint32(stamp.Bytes())
-	return height, nil
+func (m *MockSandbox) AccumulatedFee() int64 {
+	return 0
+}
+
+func (m *MockSandbox) CommitTransaction(trx *tx.Tx) {
+
+}
+
+func (m *MockSandbox) AnyRecentTransaction(txID tx.ID) bool {
+	return false
 }
