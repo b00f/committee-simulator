@@ -15,7 +15,7 @@ class Category:
     def num_validator(self):
         return self.end - self.start + 1
 
-    def expected_reward(self, number_of_days, online_stake):
+    def expected_reward(self, number_of_days: float, online_stake: float):
         return number_of_days * 8640 * self.stake / online_stake
 
     def average_reward(self):
@@ -28,7 +28,7 @@ def draw(filename, committee_size, offline, number_of_days):
     stakes = df['Stake']
     rewards = df['Reward']
     online_stake = df['Stake'].sum()
-    total_stake = online_stake + (online_stake * offline/100)
+    # total_stake = online_stake + (online_stake * offline/100)
 
     categories = []
     category = Category(stakes[0], 0)

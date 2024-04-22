@@ -7,6 +7,7 @@ import (
 	"github.com/pactus-project/pactus/sandbox"
 	"github.com/pactus-project/pactus/sortition"
 	"github.com/pactus-project/pactus/types/account"
+	"github.com/pactus-project/pactus/types/amount"
 	"github.com/pactus-project/pactus/types/param"
 	"github.com/pactus-project/pactus/types/tx"
 	"github.com/pactus-project/pactus/types/validator"
@@ -101,7 +102,7 @@ func (m *MockSandbox) PowerDelta() int64 {
 	panic("unreachable")
 }
 
-func (m *MockSandbox) AccumulatedFee() int64 {
+func (m *MockSandbox) AccumulatedFee() amount.Amount {
 	return 0
 }
 

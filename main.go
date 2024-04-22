@@ -14,6 +14,7 @@ import (
 	"github.com/pactus-project/pactus/crypto/bls"
 	"github.com/pactus-project/pactus/execution"
 	"github.com/pactus-project/pactus/sortition"
+	"github.com/pactus-project/pactus/types/amount"
 	"github.com/pactus-project/pactus/types/param"
 	"github.com/pactus-project/pactus/types/tx"
 	"github.com/pactus-project/pactus/types/validator"
@@ -77,14 +78,14 @@ func main() {
 
 	mockValidators := make(map[crypto.Address]*validator.Validator)
 	valKeys := []ValKey{}
-	totalStake := int64(0)
+	totalStake := amount.Amount(0)
 	num := int32(0)
 	ts := testsuite.NewTestSuiteForSeed(time.Now().Unix())
 	for _, stake := range config.Stakes {
 		for i := 0; i < stake[1]; i++ {
 			pub, prv := ts.RandBLSKeyPair()
 			val := validator.NewValidator(pub, num)
-			val.AddToStake(int64(stake[0]) * 10e9)
+			val.AddToStake(amount.Amount(stake[0] * 10e9))
 			val.UpdateLastBondingHeight(uint32(i))
 			val.UpdateLastSortitionHeight(uint32(i))
 
@@ -101,7 +102,7 @@ func main() {
 		}
 	}
 
-	totalStake += int64(float64(totalStake) * float64(config.OfflinePercentage) / 100)
+	totalStake += amount.Amount(float64(totalStake) * float64(config.OfflinePercentage) / 100)
 
 	vals := []*validator.Validator{}
 	for i := 0; i < config.CommitteeSize; i++ {
@@ -119,7 +120,7 @@ func main() {
 		for i := start; i < start+len; i++ {
 			valKey := valKeys[i]
 
-			rnd := util.RandInt64(totalStake)
+			rnd := util.RandInt64(totalStake.ToNanoPAC())
 			if rnd < valKey.val.Power() {
 				valKeys[i].sortition++
 				trx := tx.NewSortitionTx(height, valKey.val.Address(), ts.RandProof())
@@ -221,7 +222,7 @@ func main() {
 	totalRewards := 0
 	totalSortitions := 0
 	for i, valPrv := range valKeys {
-		fmt.Fprintf(csvFile, "%v, %v, %v, %v\n", i+1, valPrv.val.Stake()/10e9, valPrv.reward, valPrv.sortition)
+		fmt.Fprintf(csvFile, "%v, %v, %v, %v\n", i+1, valPrv.val.Stake().ToNanoPAC(), valPrv.reward, valPrv.sortition)
 
 		totalRewards += valPrv.reward
 		totalSortitions += valPrv.sortition
