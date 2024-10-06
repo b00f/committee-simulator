@@ -113,3 +113,7 @@ func (m *MockSandbox) CommitTransaction(trx *tx.Tx) {
 func (m *MockSandbox) AnyRecentTransaction(txID tx.ID) bool {
 	return false
 }
+
+func (m *MockSandbox) IsBanned(crypto.Address) bool {
+	return false
+}

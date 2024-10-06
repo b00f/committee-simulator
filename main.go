@@ -148,7 +148,6 @@ func main() {
 	}
 
 	seed := ts.RandSeed()
-	exe := execution.NewExecutor()
 	startHeight := uint32(10000)
 	sb := &sandbox.MockSandbox{
 		MockCommittee:    cmt,
@@ -185,7 +184,7 @@ func main() {
 		}
 
 		for _, trx := range allSortitions {
-			err := exe.Execute(trx, sb)
+			err := execution.Execute(trx, sb)
 			if err != nil {
 				val := sb.Validator(trx.Payload().Signer())
 				fmt.Fprintf(logFile, "height: %v, val %v, err: %v\n", height, val.Number(), err.Error())
